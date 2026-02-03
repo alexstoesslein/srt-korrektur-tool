@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SRT Korrektur-Tool</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 SRT Korrektur-Tool</h1>
+            <p>Überprüfe und korrigiere Untertitel mit KI-Unterstützung</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-box" id="video-upload">
+                    <input type="file" id="video-input" accept="video/*" hidden>
+                    <label for="video-input" class="upload-label">
+                        <span class="icon">🎥</span>
+                        <span class="text">Video hochladen</span>
+                        <span class="hint">(optional - zur Vorschau)</span>
+                    </label>
+                    <span class="file-name" id="video-name"></span>
+                </div>
+
+                <div class="upload-box" id="srt-upload">
+                    <input type="file" id="srt-input" accept=".srt" hidden>
+                    <label for="srt-input" class="upload-label">
+                        <span class="icon">📝</span>
+                        <span class="text">SRT-Datei hochladen</span>
+                        <span class="hint">(erforderlich)</span>
+                    </label>
+                    <span class="file-name" id="srt-name"></span>
+                </div>
+            </section>
+
+            <!-- Info Section -->
+            <section class="info-section">
+                <p>✨ Kostenlose Rechtschreibprüfung powered by <a href="https://languagetool.org" target="_blank">LanguageTool</a> - kein API-Key erforderlich!</p>
+            </section>
+
+            <!-- Video Preview -->
+            <section class="video-section" id="video-section" style="display: none;">
+                <div class="video-container">
+                    <video id="video-player" controls>
+                        Ihr Browser unterstützt kein Video-Tag.
+                    </video>
+                    <div class="subtitle-overlay" id="subtitle-overlay"></div>
+                </div>
+            </section>
+
+            <!-- Correction Controls -->
+            <section class="controls-section">
+                <button id="check-btn" class="btn btn-primary" disabled>
+                    <span class="btn-icon">🔍</span>
+                    Rechtschreibung prüfen
+                </button>
+                <div class="progress-container" id="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span class="progress-text" id="progress-text">0%</span>
+                </div>
+            </section>
+
+            <!-- Subtitles Editor -->
+            <section class="editor-section" id="editor-section" style="display: none;">
+                <div class="editor-header">
+                    <h2>Untertitel-Editor</h2>
+                    <div class="editor-controls">
+                        <button id="accept-all-btn" class="btn btn-success">
+                            ✓ Alle Korrekturen übernehmen
+                        </button>
+                        <button id="reject-all-btn" class="btn btn-danger">
+                            ✗ Alle Korrekturen ablehnen
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filter-controls">
+                    <label>
+                        <input type="checkbox" id="filter-corrections" checked>
+                        Nur Einträge mit Korrekturen anzeigen
+                    </label>
+                    <span class="stats" id="correction-stats"></span>
+                </div>
+
+                <div class="subtitles-list" id="subtitles-list">
+                    <!-- Subtitles will be inserted here -->
+                </div>
+            </section>
+
+            <!-- Export Section -->
+            <section class="export-section" id="export-section" style="display: none;">
+                <button id="export-btn" class="btn btn-primary">
+                    <span class="btn-icon">💾</span>
+                    Korrigierte SRT exportieren
+                </button>
+                <button id="export-original-btn" class="btn btn-secondary">
+                    <span class="btn-icon">📄</span>
+                    Original exportieren
+                </button>
+            </section>
+        </main>
+
+        <footer>
+            <p>SRT Korrektur-Tool &copy; 2024 | Powered by LanguageTool (kostenlos)</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

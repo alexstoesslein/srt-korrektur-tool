@@ -1,0 +1,31 @@
+1
+00:00:01,000 --> 00:00:04,000
+Hallo, das ist ein Test mit Fehlern.
+
+2
+00:00:05,000 --> 00:00:08,000
+Ich habe heute ein sehr gutes Buch gelessen.
+
+3
+00:00:09,000 --> 00:00:12,000
+Die Rechtschreibung ist ser wichtig.
+
+4
+00:00:13,000 --> 00:00:16,000
+Manchmal macht mann Fehler beim tippen.
+
+5
+00:00:17,000 --> 00:00:20,000
+Das Weter ist heute sehr schön.
+
+6
+00:00:21,000 --> 00:00:24,000
+Ich gehe nach dem Arbeit nach Hause.
+
+7
+00:00:25,000 --> 00:00:28,000
+Er hatt gestern viel gearbeitet.
+
+8
+00:00:29,000 --> 00:00:32,000
+Wir haben kein Zeit mehr.
