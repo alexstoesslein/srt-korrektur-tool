@@ -1,5 +1,6 @@
 // SRT Korrektur-Tool - Main Application
 // Verwendet LanguageTool API (kostenlos)
+// Unterstützt SRT aus Premiere Pro, DaVinci Resolve, Final Cut Pro, etc.
 
 class SRTCorrector {
     constructor() {
@@ -102,7 +103,8 @@ class SRTCorrector {
         this.exportOriginalBtn.addEventListener('click', () => this.exportOriginalSrt());
     }
 
-    // File handling
+    // ==================== FILE HANDLING ====================
+
     handleVideoUpload(e) {
         const file = e.target.files[0];
         if (file) {
@@ -146,34 +148,54 @@ class SRTCorrector {
         this.editorSection.style.display = 'block';
     }
 
-    // SRT Parser
+    // ==================== SRT PARSING ====================
+    // Unterstützt verschiedene SRT-Formate von Premiere Pro, DaVinci Resolve, etc.
+
     parseSrt(content) {
         const subtitles = [];
-        const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+        // Normalize line endings (Windows, Mac, Linux)
+        let normalizedContent = content
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+
+        // Split by double newlines (or more)
         const blocks = normalizedContent.trim().split(/\n\n+/);
 
         for (const block of blocks) {
             const lines = block.split('\n').filter(line => line.trim() !== '');
-            if (lines.length >= 2) {
-                const index = parseInt(lines[0], 10);
-                const timeParts = lines[1].split(' --> ');
 
-                if (timeParts.length === 2 && !isNaN(index)) {
-                    const startTime = this.parseTime(timeParts[0].trim());
-                    const endTime = this.parseTime(timeParts[1].trim());
-                    const text = lines.slice(2).join('\n');
+            if (lines.length >= 2) {
+                // First line should be the index number
+                const index = parseInt(lines[0], 10);
+
+                // Second line should be the timecode
+                const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2}[,.:]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.:]\d{3})/);
+
+                if (timeMatch && !isNaN(index)) {
+                    const startTimeStr = timeMatch[1];
+                    const endTimeStr = timeMatch[2];
+                    const startTime = this.parseTime(startTimeStr);
+                    const endTime = this.parseTime(endTimeStr);
+
+                    // Text is everything after the timecode line
+                    let text = lines.slice(2).join('\n');
+
+                    // Clean up text from various editors
+                    text = this.cleanSubtitleText(text);
 
                     subtitles.push({
                         index,
                         startTime,
                         endTime,
-                        startTimeStr: timeParts[0].trim(),
-                        endTimeStr: timeParts[1].trim(),
+                        startTimeStr: this.normalizeTimeStr(startTimeStr),
+                        endTimeStr: this.normalizeTimeStr(endTimeStr),
                         text,
+                        cleanText: text, // Text ohne HTML für die Prüfung
                         originalText: text,
                         corrected: false,
                         accepted: false,
-                        corrections: [] // Array of individual corrections
+                        corrections: []
                     });
                 }
             }
@@ -182,8 +204,48 @@ class SRTCorrector {
         return subtitles;
     }
 
+    // Clean subtitle text from HTML tags and formatting from various NLEs
+    cleanSubtitleText(text) {
+        // Remove common HTML tags from various editors
+        // <b>, </b>, <i>, </i>, <u>, </u>, <font>, </font>, etc.
+        let cleaned = text
+            // Remove bold tags
+            .replace(/<\/?b>/gi, '')
+            // Remove italic tags
+            .replace(/<\/?i>/gi, '')
+            // Remove underline tags
+            .replace(/<\/?u>/gi, '')
+            // Remove font tags (with attributes)
+            .replace(/<font[^>]*>/gi, '')
+            .replace(/<\/font>/gi, '')
+            // Remove span tags (with attributes)
+            .replace(/<span[^>]*>/gi, '')
+            .replace(/<\/span>/gi, '')
+            // Remove any other HTML tags
+            .replace(/<[^>]+>/g, '')
+            // Decode HTML entities
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, ' ')
+            // Remove multiple spaces
+            .replace(/  +/g, ' ')
+            // Trim each line
+            .split('\n')
+            .map(line => line.trim())
+            .join('\n')
+            // Trim overall
+            .trim();
+
+        return cleaned;
+    }
+
     parseTime(timeStr) {
-        const match = timeStr.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+        // Support both comma (,) and dot (.) as millisecond separator
+        // Also support colon (:) sometimes used by some editors
+        const match = timeStr.match(/(\d{2}):(\d{2}):(\d{2})[,.:]+(\d{3})/);
         if (match) {
             const hours = parseInt(match[1], 10);
             const minutes = parseInt(match[2], 10);
@@ -194,7 +256,13 @@ class SRTCorrector {
         return 0;
     }
 
-    // Video subtitle overlay
+    normalizeTimeStr(timeStr) {
+        // Normalize to standard SRT format with comma
+        return timeStr.replace(/[.:]+(\d{3})$/, ',$1');
+    }
+
+    // ==================== VIDEO OVERLAY ====================
+
     updateSubtitleOverlay() {
         const currentTime = this.videoPlayer.currentTime;
         const currentSubtitle = this.subtitles.find(sub =>
@@ -209,7 +277,8 @@ class SRTCorrector {
         }
     }
 
-    // Correction process using LanguageTool
+    // ==================== CORRECTION PROCESS ====================
+
     async startCorrection() {
         if (this.subtitles.length === 0) {
             this.showToast('Keine Untertitel geladen', 'error');
@@ -231,11 +300,9 @@ class SRTCorrector {
         let processed = 0;
         let hasErrors = false;
 
-        // Process each subtitle individually to avoid rate limits
         for (const subtitle of this.subtitles) {
             try {
                 await this.checkSubtitle(subtitle);
-                // Small delay to avoid rate limiting
                 await this.sleep(100);
             } catch (error) {
                 console.error('Error checking subtitle:', error);
@@ -259,14 +326,12 @@ class SRTCorrector {
         }
 
         this.checkBtn.disabled = false;
+        this.progressContainer.style.display = 'none';
 
         const correctionCount = this.subtitles.filter(s => s.corrected).length;
 
-        if (correctionCount > 0) {
-            this.filterCorrections.checked = true;
-        } else {
-            this.filterCorrections.checked = false;
-        }
+        // Always show all subtitles, not just corrections
+        this.filterCorrections.checked = false;
 
         this.renderSubtitles();
         this.exportSection.style.display = 'flex';
@@ -278,8 +343,6 @@ class SRTCorrector {
             } else {
                 this.showToast('Prüfung abgeschlossen! Keine Fehler gefunden.', 'success');
             }
-        } else {
-            this.showToast('Prüfung mit einigen Fehlern abgeschlossen.', 'error');
         }
     }
 
@@ -314,14 +377,10 @@ class SRTCorrector {
         const data = await response.json();
 
         if (data.matches && data.matches.length > 0) {
-            console.log(`Subtitle ${subtitle.index}: Found ${data.matches.length} issues`, data.matches);
-
-            // Store all matches with ALL their replacement options
             const matches = [];
 
             for (const match of data.matches) {
                 if (match.replacements && match.replacements.length > 0) {
-                    // Get up to 5 replacement options
                     const allReplacements = match.replacements.slice(0, 5).map(r => r.value);
 
                     matches.push({
@@ -329,7 +388,7 @@ class SRTCorrector {
                         length: match.length,
                         original: text.substring(match.offset, match.offset + match.length),
                         replacements: allReplacements,
-                        selectedIndex: 0, // Default to first suggestion
+                        selectedIndex: 0,
                         message: match.message,
                         rule: match.rule?.description || 'Unbekannte Regel'
                     });
@@ -348,7 +407,6 @@ class SRTCorrector {
                     length: m.length
                 }));
 
-                // Apply first suggestions to create correctedText
                 subtitle.correctedText = this.applyCorrections(text, subtitle.corrections);
                 subtitle.corrected = true;
 
@@ -362,7 +420,6 @@ class SRTCorrector {
     }
 
     applyCorrections(text, corrections) {
-        // Sort by offset descending to apply from end to start
         const sorted = [...corrections].sort((a, b) => b.offset - a.offset);
         let result = text;
 
@@ -375,7 +432,8 @@ class SRTCorrector {
         return result;
     }
 
-    // Render subtitles
+    // ==================== RENDERING ====================
+
     renderSubtitles() {
         const filterOnly = this.filterCorrections.checked;
         const filtered = filterOnly
@@ -383,12 +441,100 @@ class SRTCorrector {
             : this.subtitles;
 
         if (filtered.length === 0 && filterOnly) {
-            this.subtitlesList.innerHTML = '<div class="no-corrections">Keine Korrekturen gefunden. Deaktiviere den Filter, um alle Untertitel zu sehen.</div>';
+            this.subtitlesList.innerHTML = '<div class="no-corrections">Keine Korrekturen mehr offen. Deaktiviere den Filter, um alle Untertitel zu sehen.</div>';
         } else {
             this.subtitlesList.innerHTML = filtered.map(sub => this.renderSubtitleItem(sub)).join('');
         }
 
-        // Add event listeners
+        this.attachEventListeners();
+        this.updateStats();
+    }
+
+    renderSubtitleItem(sub) {
+        const hasCorrection = sub.corrected && !sub.accepted;
+        const isAccepted = sub.accepted;
+
+        let statusClass = '';
+        if (hasCorrection) {
+            statusClass = 'has-correction';
+        } else if (isAccepted) {
+            statusClass = 'accepted';
+        }
+
+        return `
+            <div class="subtitle-item ${statusClass}" data-index="${sub.index}">
+                <div class="subtitle-header">
+                    <span class="subtitle-index">#${sub.index}</span>
+                    <span class="subtitle-time">
+                        <button class="btn-icon jump-to-time" data-time="${sub.startTime}" title="Zur Position springen">▶️</button>
+                        ${sub.startTimeStr} → ${sub.endTimeStr}
+                    </span>
+                    ${hasCorrection ? '<span class="correction-badge">⚠️ Korrektur verfügbar</span>' : ''}
+                    ${isAccepted ? '<span class="accepted-badge">✓ Korrigiert</span>' : ''}
+                </div>
+                <div class="subtitle-content">
+                    <div class="subtitle-text ${hasCorrection ? 'needs-correction' : ''}"
+                         contenteditable="true"
+                         data-index="${sub.index}">${this.escapeHtml(sub.text)}</div>
+                    <div class="edit-hint">💡 Klicken zum Bearbeiten • Enter = Speichern • Shift+Enter = Neue Zeile</div>
+                </div>
+                ${hasCorrection ? this.renderCorrectionPanel(sub) : ''}
+            </div>
+        `;
+    }
+
+    renderCorrectionPanel(sub) {
+        const correctionsHtml = sub.corrections.map((c, idx) => {
+            let replacementHtml;
+            if (c.allReplacements && c.allReplacements.length > 1) {
+                const options = c.allReplacements.map((r, i) =>
+                    `<option value="${i}" ${i === 0 ? 'selected' : ''}>${this.escapeHtml(r)}</option>`
+                ).join('');
+                replacementHtml = `<select class="correction-select" data-sub-index="${sub.index}" data-corr-index="${idx}">${options}</select>`;
+            } else {
+                replacementHtml = `<span class="correction-replacement">${this.escapeHtml(c.replacement)}</span>`;
+            }
+
+            return `
+                <div class="correction-item">
+                    <div class="correction-words">
+                        <span class="word-original">${this.escapeHtml(c.original)}</span>
+                        <span class="word-arrow">→</span>
+                        ${replacementHtml}
+                    </div>
+                    <div class="correction-reason">${this.escapeHtml(c.message)}</div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="correction-panel">
+                <div class="correction-panel-header">
+                    <span>📝 ${sub.corrections.length} Fehler gefunden</span>
+                    <div class="correction-panel-actions">
+                        <button class="btn btn-success btn-small accept-btn" data-index="${sub.index}">✓ Alle übernehmen</button>
+                        <button class="btn btn-secondary btn-small reject-btn" data-index="${sub.index}">✗ Ignorieren</button>
+                    </div>
+                </div>
+                <div class="correction-items">
+                    ${correctionsHtml}
+                </div>
+                <div class="correction-preview">
+                    <div class="preview-label">Vorschau nach Korrektur:</div>
+                    <div class="preview-text" data-index="${sub.index}">${this.escapeHtml(sub.correctedText)}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    attachEventListeners() {
+        // Accept/Reject buttons
         this.subtitlesList.querySelectorAll('.accept-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const index = parseInt(e.target.closest('.accept-btn').dataset.index, 10);
@@ -403,22 +549,20 @@ class SRTCorrector {
             });
         });
 
+        // Editable text fields
         this.subtitlesList.querySelectorAll('.subtitle-text').forEach(el => {
-            // Save on blur (when clicking outside)
             el.addEventListener('blur', (e) => {
                 const index = parseInt(e.target.dataset.index, 10);
                 this.handleManualEdit(index, e.target.textContent);
             });
 
-            // Also save on Enter key (Shift+Enter for new line)
             el.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    e.target.blur(); // Trigger blur to save
+                    e.target.blur();
                 }
             });
 
-            // Visual feedback while editing
             el.addEventListener('focus', (e) => {
                 e.target.classList.add('editing');
             });
@@ -428,6 +572,7 @@ class SRTCorrector {
             });
         });
 
+        // Jump to time buttons
         this.subtitlesList.querySelectorAll('.jump-to-time').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const time = parseFloat(e.target.closest('.jump-to-time').dataset.time);
@@ -438,19 +583,18 @@ class SRTCorrector {
             });
         });
 
-        // Add event listeners for correction dropdowns
+        // Correction dropdowns
         this.subtitlesList.querySelectorAll('.correction-select').forEach(select => {
             select.addEventListener('change', (e) => {
                 const subIndex = parseInt(e.target.dataset.subIndex, 10);
                 const corrIndex = parseInt(e.target.dataset.corrIndex, 10);
                 const selectedOptionIndex = parseInt(e.target.value, 10);
-
                 this.updateCorrectionChoice(subIndex, corrIndex, selectedOptionIndex);
             });
         });
-
-        this.updateStats();
     }
+
+    // ==================== CORRECTION ACTIONS ====================
 
     updateCorrectionChoice(subIndex, corrIndex, selectedOptionIndex) {
         const subtitle = this.subtitles.find(s => s.index === subIndex);
@@ -458,16 +602,12 @@ class SRTCorrector {
             const correction = subtitle.corrections[corrIndex];
             correction.replacement = correction.allReplacements[selectedOptionIndex];
 
-            // Recalculate the corrected text
             subtitle.correctedText = this.applyCorrections(subtitle.originalText, subtitle.corrections);
 
-            // Update the preview
-            const preview = this.subtitlesList.querySelector(`.diff-preview[data-index="${subIndex}"]`);
+            const preview = this.subtitlesList.querySelector(`.preview-text[data-index="${subIndex}"]`);
             if (preview) {
                 preview.textContent = subtitle.correctedText;
             }
-
-            console.log(`Updated subtitle ${subIndex}, correction ${corrIndex} to: ${correction.replacement}`);
         }
     }
 
@@ -477,138 +617,35 @@ class SRTCorrector {
 
         const trimmedText = newText.trim();
 
-        // Check if text actually changed
         if (trimmedText === subtitle.text) {
             return;
         }
 
-        console.log(`Manual edit for #${index}:`);
-        console.log(`  Was: "${subtitle.text}"`);
-        console.log(`  Now: "${trimmedText}"`);
-
-        // Update the text
         subtitle.text = trimmedText;
 
-        // If this was a corrected subtitle, mark it as manually edited and accepted
         if (subtitle.corrected) {
             subtitle.accepted = true;
             subtitle.manuallyEdited = true;
         } else {
-            // If it wasn't corrected before, mark it as manually edited
             subtitle.manuallyEdited = true;
         }
 
+        this.renderSubtitles();
         this.showToast('Änderung gespeichert', 'success');
-        this.updateStats();
     }
 
-    renderSubtitleItem(sub) {
-        const hasCorrection = sub.corrected && !sub.accepted;
-        const itemClass = sub.accepted ? 'accepted' : (hasCorrection ? 'has-correction' : '');
-
-        return `
-            <div class="subtitle-item ${itemClass}" data-index="${sub.index}">
-                <div class="subtitle-header">
-                    <span class="subtitle-index">#${sub.index}</span>
-                    <span class="subtitle-time">
-                        <button class="btn-icon jump-to-time" data-time="${sub.startTime}" title="Zur Position springen">
-                            ▶️
-                        </button>
-                        ${sub.startTimeStr} → ${sub.endTimeStr}
-                    </span>
-                </div>
-                <div class="subtitle-content">
-                    <div class="subtitle-text" contenteditable="true" data-index="${sub.index}">${this.escapeHtml(sub.text)}</div>
-                    <div class="edit-hint">💡 Direkt bearbeiten möglich • Enter = Speichern • Shift+Enter = Neue Zeile</div>
-                </div>
-                ${hasCorrection ? this.renderCorrectionSection(sub) : ''}
-            </div>
-        `;
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    renderCorrectionSection(sub) {
-        const detailsHtml = sub.corrections.map((c, corrIndex) => {
-            // Create dropdown if multiple options available
-            let replacementHtml;
-            if (c.allReplacements && c.allReplacements.length > 1) {
-                const options = c.allReplacements.map((r, i) =>
-                    `<option value="${i}" ${r === c.replacement ? 'selected' : ''}>${this.escapeHtml(r)}</option>`
-                ).join('');
-                replacementHtml = `
-                    <select class="correction-select" data-sub-index="${sub.index}" data-corr-index="${corrIndex}">
-                        ${options}
-                    </select>
-                `;
-            } else {
-                replacementHtml = `<span class="correction-replacement">${this.escapeHtml(c.replacement)}</span>`;
-            }
-
-            return `
-                <div class="correction-detail">
-                    <span class="correction-original">${this.escapeHtml(c.original)}</span>
-                    <span class="correction-arrow">→</span>
-                    ${replacementHtml}
-                    <span class="correction-message">${this.escapeHtml(c.message)}</span>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="correction-section">
-                <div class="correction-header">
-                    <span class="correction-label">📝 ${sub.corrections.length} Korrektur${sub.corrections.length > 1 ? 'en' : ''} gefunden</span>
-                    <div class="correction-actions">
-                        <button class="btn btn-success btn-small accept-btn" data-index="${sub.index}">
-                            ✓ Übernehmen
-                        </button>
-                        <button class="btn btn-danger btn-small reject-btn" data-index="${sub.index}">
-                            ✗ Ablehnen
-                        </button>
-                    </div>
-                </div>
-                <div class="correction-details">
-                    ${detailsHtml}
-                </div>
-                <div class="correction-diff">
-                    <div class="diff-original">
-                        <div class="diff-label">Original</div>
-                        ${this.escapeHtml(sub.originalText)}
-                    </div>
-                    <div class="diff-corrected">
-                        <div class="diff-label">Vorschau</div>
-                        <div class="diff-preview" data-index="${sub.index}">${this.escapeHtml(sub.correctedText)}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Correction actions
     acceptCorrection(index) {
         const subtitle = this.subtitles.find(s => s.index === index);
         if (subtitle) {
-            // Recalculate correctedText based on current correction choices
             if (subtitle.corrections && subtitle.corrections.length > 0) {
                 subtitle.correctedText = this.applyCorrections(subtitle.originalText, subtitle.corrections);
             }
 
             if (subtitle.correctedText) {
-                console.log(`Accepting correction for #${index}:`);
-                console.log(`  Original: "${subtitle.originalText}"`);
-                console.log(`  Corrected: "${subtitle.correctedText}"`);
-
                 subtitle.text = subtitle.correctedText;
                 subtitle.accepted = true;
                 this.renderSubtitles();
                 this.showToast('Korrektur übernommen', 'success');
-            } else {
-                console.error(`No correctedText for subtitle #${index}`);
             }
         }
     }
@@ -616,25 +653,22 @@ class SRTCorrector {
     rejectCorrection(index) {
         const subtitle = this.subtitles.find(s => s.index === index);
         if (subtitle) {
-            subtitle.text = subtitle.originalText;
             subtitle.corrected = false;
             subtitle.accepted = false;
+            subtitle.corrections = [];
             this.corrections.delete(index);
             this.renderSubtitles();
-            this.showToast('Korrektur abgelehnt', 'info');
+            this.showToast('Korrektur ignoriert', 'info');
         }
     }
 
     acceptAllCorrections() {
         this.subtitles.forEach(sub => {
-            if (sub.corrected) {
-                // Recalculate correctedText based on current correction choices
+            if (sub.corrected && !sub.accepted) {
                 if (sub.corrections && sub.corrections.length > 0) {
                     sub.correctedText = this.applyCorrections(sub.originalText, sub.corrections);
                 }
-
                 if (sub.correctedText) {
-                    console.log(`Accepting all - #${sub.index}: "${sub.originalText}" → "${sub.correctedText}"`);
                     sub.text = sub.correctedText;
                     sub.accepted = true;
                 }
@@ -646,24 +680,26 @@ class SRTCorrector {
 
     rejectAllCorrections() {
         this.subtitles.forEach(sub => {
-            sub.text = sub.originalText;
-            sub.corrected = false;
-            sub.accepted = false;
+            if (sub.corrected && !sub.accepted) {
+                sub.corrected = false;
+                sub.corrections = [];
+            }
         });
         this.corrections.clear();
         this.renderSubtitles();
-        this.showToast('Alle Korrekturen abgelehnt', 'info');
+        this.showToast('Alle Korrekturen ignoriert', 'info');
     }
 
     updateStats() {
         const total = this.subtitles.length;
-        const corrected = this.subtitles.filter(s => s.corrected).length;
-        const accepted = this.subtitles.filter(s => s.accepted).length;
+        const withErrors = this.subtitles.filter(s => s.corrected && !s.accepted).length;
+        const corrected = this.subtitles.filter(s => s.accepted).length;
 
-        this.correctionStats.textContent = `${total} Untertitel | ${corrected} mit Fehlern | ${accepted} korrigiert`;
+        this.correctionStats.textContent = `${total} Untertitel | ${withErrors} mit Fehlern | ${corrected} korrigiert`;
     }
 
-    // Export functions
+    // ==================== EXPORT ====================
+
     generateSrt(subtitles) {
         return subtitles.map(sub => {
             return `${sub.index}\n${sub.startTimeStr} --> ${sub.endTimeStr}\n${sub.text}\n`;
@@ -683,12 +719,6 @@ class SRTCorrector {
     }
 
     exportCorrectedSrt() {
-        // Debug: Log what we're exporting
-        console.log('Exporting subtitles:');
-        this.subtitles.forEach(sub => {
-            console.log(`  #${sub.index}: "${sub.text}" (accepted: ${sub.accepted})`);
-        });
-
         const content = this.generateSrt(this.subtitles);
         const originalName = this.srtFile?.name || 'subtitles.srt';
         const newName = originalName.replace('.srt', '_korrigiert.srt');
@@ -707,7 +737,6 @@ class SRTCorrector {
         this.showToast('Original SRT exportiert', 'success');
     }
 
-    // Toast notification
     showToast(message, type = 'info') {
         this.toast.textContent = message;
         this.toast.className = `toast ${type} visible`;
