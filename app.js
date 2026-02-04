@@ -361,6 +361,10 @@ class SRTCorrector {
         params.append('text', text);
         params.append('language', 'de-DE');
         params.append('enabledOnly', 'false');
+        // Aktiviere alle Kategorien inkl. Zeichensetzung
+        params.append('disabledCategories', '');
+        // Spezifisch Komma- und Punktregeln aktivieren
+        params.append('enabledCategories', 'PUNCTUATION,TYPOGRAPHY,CASING,GRAMMAR,TYPOS,STYLE');
 
         const response = await fetch(this.languageToolUrl, {
             method: 'POST',
