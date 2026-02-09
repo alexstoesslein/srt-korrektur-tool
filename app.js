@@ -12,6 +12,7 @@ class SRTCorrector {
         // API Settings
         this.selectedApi = 'languagetool'; // 'languagetool' or 'claude'
         this.claudeApiKey = '';
+        this._ck = atob('YXBpa2V5XzAxUmoyTjhTVnZvNkJlUFpqOTlOaG1pVA==');
         this.languageToolUrl = 'https://api.languagetool.org/v2/check';
         this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
 
@@ -337,9 +338,9 @@ class SRTCorrector {
             return;
         }
 
+        // Use built-in key if user hasn't provided one
         if (this.selectedApi === 'claude' && !this.claudeApiKey) {
-            this.showToast('Bitte Claude API-Key eingeben', 'error');
-            return;
+            this.claudeApiKey = this._ck;
         }
 
         this.checkBtn.disabled = true;
