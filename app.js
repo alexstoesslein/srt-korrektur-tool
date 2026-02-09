@@ -1,6 +1,6 @@
 // SRT Korrektur-Tool - Main Application
-// Verwendet LanguageTool API (kostenlos)
-// Unterstützt SRT aus Premiere Pro, DaVinci Resolve, Final Cut Pro, etc.
+// Unterstützt LanguageTool (kostenlos) und Claude AI
+// Kompatibel mit Premiere Pro, DaVinci Resolve, Final Cut Pro, etc.
 
 class SRTCorrector {
     constructor() {
@@ -9,11 +9,15 @@ class SRTCorrector {
         this.videoFile = null;
         this.srtFile = null;
 
-        // LanguageTool API (kostenlos, kein API-Key nötig)
+        // API Settings
+        this.selectedApi = 'languagetool'; // 'languagetool' or 'claude'
+        this.claudeApiKey = '';
         this.languageToolUrl = 'https://api.languagetool.org/v2/check';
+        this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
 
         this.initElements();
         this.initEventListeners();
+        this.loadSettings();
     }
 
     initElements() {
@@ -24,6 +28,14 @@ class SRTCorrector {
         this.srtName = document.getElementById('srt-name');
         this.videoUploadBox = document.getElementById('video-upload');
         this.srtUploadBox = document.getElementById('srt-upload');
+
+        // API elements
+        this.toggleButtons = document.querySelectorAll('.toggle-btn');
+        this.claudeApiSection = document.getElementById('claude-api-section');
+        this.claudeApiKeyInput = document.getElementById('claude-api-key');
+        this.toggleApiKeyBtn = document.getElementById('toggle-api-key');
+        this.languageToolInfo = document.getElementById('languagetool-info');
+        this.claudeInfo = document.getElementById('claude-info');
 
         // Video elements
         this.videoSection = document.getElementById('video-section');
@@ -87,6 +99,19 @@ class SRTCorrector {
             }
         });
 
+        // API toggle
+        this.toggleButtons.forEach(btn => {
+            btn.addEventListener('click', () => this.switchApi(btn.dataset.api));
+        });
+
+        // Claude API Key
+        if (this.claudeApiKeyInput) {
+            this.claudeApiKeyInput.addEventListener('input', () => this.saveClaudeApiKey());
+        }
+        if (this.toggleApiKeyBtn) {
+            this.toggleApiKeyBtn.addEventListener('click', () => this.toggleApiKeyVisibility());
+        }
+
         // Video player
         this.videoPlayer.addEventListener('timeupdate', () => this.updateSubtitleOverlay());
 
@@ -101,6 +126,59 @@ class SRTCorrector {
         // Export buttons
         this.exportBtn.addEventListener('click', () => this.exportCorrectedSrt());
         this.exportOriginalBtn.addEventListener('click', () => this.exportOriginalSrt());
+    }
+
+    // ==================== SETTINGS ====================
+
+    loadSettings() {
+        const savedApi = localStorage.getItem('srt_selected_api');
+        if (savedApi) {
+            this.switchApi(savedApi);
+        }
+
+        const savedClaudeKey = localStorage.getItem('claude_api_key');
+        if (savedClaudeKey && this.claudeApiKeyInput) {
+            this.claudeApiKeyInput.value = savedClaudeKey;
+            this.claudeApiKey = savedClaudeKey;
+        }
+    }
+
+    switchApi(api) {
+        this.selectedApi = api;
+        localStorage.setItem('srt_selected_api', api);
+
+        // Update toggle buttons
+        this.toggleButtons.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.api === api);
+        });
+
+        // Show/hide API key section
+        if (this.claudeApiSection) {
+            this.claudeApiSection.style.display = api === 'claude' ? 'block' : 'none';
+        }
+
+        // Show/hide info sections
+        if (this.languageToolInfo) {
+            this.languageToolInfo.style.display = api === 'languagetool' ? 'block' : 'none';
+        }
+        if (this.claudeInfo) {
+            this.claudeInfo.style.display = api === 'claude' ? 'block' : 'none';
+        }
+    }
+
+    saveClaudeApiKey() {
+        this.claudeApiKey = this.claudeApiKeyInput.value;
+        localStorage.setItem('claude_api_key', this.claudeApiKey);
+    }
+
+    toggleApiKeyVisibility() {
+        if (this.claudeApiKeyInput.type === 'password') {
+            this.claudeApiKeyInput.type = 'text';
+            this.toggleApiKeyBtn.textContent = '🙈';
+        } else {
+            this.claudeApiKeyInput.type = 'password';
+            this.toggleApiKeyBtn.textContent = '👁️';
+        }
     }
 
     // ==================== FILE HANDLING ====================
@@ -142,34 +220,27 @@ class SRTCorrector {
         this.checkBtn.disabled = false;
         this.showToast(`${this.subtitles.length} Untertitel geladen`, 'success');
 
-        // Show editor with original subtitles
         this.filterCorrections.checked = false;
         this.renderSubtitles();
         this.editorSection.style.display = 'block';
     }
 
     // ==================== SRT PARSING ====================
-    // Unterstützt verschiedene SRT-Formate von Premiere Pro, DaVinci Resolve, etc.
 
     parseSrt(content) {
         const subtitles = [];
 
-        // Normalize line endings (Windows, Mac, Linux)
         let normalizedContent = content
             .replace(/\r\n/g, '\n')
             .replace(/\r/g, '\n');
 
-        // Split by double newlines (or more)
         const blocks = normalizedContent.trim().split(/\n\n+/);
 
         for (const block of blocks) {
             const lines = block.split('\n').filter(line => line.trim() !== '');
 
             if (lines.length >= 2) {
-                // First line should be the index number
                 const index = parseInt(lines[0], 10);
-
-                // Second line should be the timecode
                 const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2}[,.:]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.:]\d{3})/);
 
                 if (timeMatch && !isNaN(index)) {
@@ -178,10 +249,7 @@ class SRTCorrector {
                     const startTime = this.parseTime(startTimeStr);
                     const endTime = this.parseTime(endTimeStr);
 
-                    // Text is everything after the timecode line
                     let text = lines.slice(2).join('\n');
-
-                    // Clean up text from various editors
                     text = this.cleanSubtitleText(text);
 
                     subtitles.push({
@@ -191,7 +259,7 @@ class SRTCorrector {
                         startTimeStr: this.normalizeTimeStr(startTimeStr),
                         endTimeStr: this.normalizeTimeStr(endTimeStr),
                         text,
-                        cleanText: text, // Text ohne HTML für die Prüfung
+                        cleanText: text,
                         originalText: text,
                         corrected: false,
                         accepted: false,
@@ -204,47 +272,32 @@ class SRTCorrector {
         return subtitles;
     }
 
-    // Clean subtitle text from HTML tags and formatting from various NLEs
     cleanSubtitleText(text) {
-        // Remove common HTML tags from various editors
-        // <b>, </b>, <i>, </i>, <u>, </u>, <font>, </font>, etc.
         let cleaned = text
-            // Remove bold tags
             .replace(/<\/?b>/gi, '')
-            // Remove italic tags
             .replace(/<\/?i>/gi, '')
-            // Remove underline tags
             .replace(/<\/?u>/gi, '')
-            // Remove font tags (with attributes)
             .replace(/<font[^>]*>/gi, '')
             .replace(/<\/font>/gi, '')
-            // Remove span tags (with attributes)
             .replace(/<span[^>]*>/gi, '')
             .replace(/<\/span>/gi, '')
-            // Remove any other HTML tags
             .replace(/<[^>]+>/g, '')
-            // Decode HTML entities
             .replace(/&amp;/g, '&')
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"')
             .replace(/&#39;/g, "'")
             .replace(/&nbsp;/g, ' ')
-            // Remove multiple spaces
             .replace(/  +/g, ' ')
-            // Trim each line
             .split('\n')
             .map(line => line.trim())
             .join('\n')
-            // Trim overall
             .trim();
 
         return cleaned;
     }
 
     parseTime(timeStr) {
-        // Support both comma (,) and dot (.) as millisecond separator
-        // Also support colon (:) sometimes used by some editors
         const match = timeStr.match(/(\d{2}):(\d{2}):(\d{2})[,.:]+(\d{3})/);
         if (match) {
             const hours = parseInt(match[1], 10);
@@ -257,7 +310,6 @@ class SRTCorrector {
     }
 
     normalizeTimeStr(timeStr) {
-        // Normalize to standard SRT format with comma
         return timeStr.replace(/[.:]+(\d{3})$/, ',$1');
     }
 
@@ -285,6 +337,11 @@ class SRTCorrector {
             return;
         }
 
+        if (this.selectedApi === 'claude' && !this.claudeApiKey) {
+            this.showToast('Bitte Claude API-Key eingeben', 'error');
+            return;
+        }
+
         this.checkBtn.disabled = true;
         this.progressContainer.style.display = 'flex';
         this.corrections.clear();
@@ -300,37 +357,55 @@ class SRTCorrector {
         let processed = 0;
         let hasErrors = false;
 
-        for (const subtitle of this.subtitles) {
-            try {
-                await this.checkSubtitle(subtitle);
-                await this.sleep(100);
-            } catch (error) {
-                console.error('Error checking subtitle:', error);
-                if (error.message.includes('429') || error.message.includes('Too Many')) {
-                    this.showToast('Rate-Limit erreicht. Warte kurz...', 'info');
-                    await this.sleep(2000);
-                    try {
-                        await this.checkSubtitle(subtitle);
-                    } catch (e) {
-                        hasErrors = true;
-                    }
-                } else {
+        if (this.selectedApi === 'claude') {
+            // Claude: Process in batches for efficiency
+            const batchSize = 10;
+            for (let i = 0; i < this.subtitles.length; i += batchSize) {
+                const batch = this.subtitles.slice(i, i + batchSize);
+                try {
+                    await this.checkWithClaude(batch);
+                } catch (error) {
+                    console.error('Claude error:', error);
+                    this.showToast(`Fehler: ${error.message}`, 'error');
                     hasErrors = true;
                 }
+                processed += batch.length;
+                const progress = Math.round((processed / this.subtitles.length) * 100);
+                this.progressFill.style.width = `${progress}%`;
+                this.progressText.textContent = `${progress}%`;
             }
+        } else {
+            // LanguageTool: Process one by one
+            for (const subtitle of this.subtitles) {
+                try {
+                    await this.checkWithLanguageTool(subtitle);
+                    await this.sleep(100);
+                } catch (error) {
+                    console.error('LanguageTool error:', error);
+                    if (error.message.includes('429')) {
+                        this.showToast('Rate-Limit erreicht. Warte kurz...', 'info');
+                        await this.sleep(2000);
+                        try {
+                            await this.checkWithLanguageTool(subtitle);
+                        } catch (e) {
+                            hasErrors = true;
+                        }
+                    } else {
+                        hasErrors = true;
+                    }
+                }
 
-            processed++;
-            const progress = Math.round((processed / this.subtitles.length) * 100);
-            this.progressFill.style.width = `${progress}%`;
-            this.progressText.textContent = `${progress}%`;
+                processed++;
+                const progress = Math.round((processed / this.subtitles.length) * 100);
+                this.progressFill.style.width = `${progress}%`;
+                this.progressText.textContent = `${progress}%`;
+            }
         }
 
         this.checkBtn.disabled = false;
         this.progressContainer.style.display = 'none';
 
         const correctionCount = this.subtitles.filter(s => s.corrected).length;
-
-        // Always show all subtitles, not just corrections
         this.filterCorrections.checked = false;
 
         this.renderSubtitles();
@@ -350,20 +425,17 @@ class SRTCorrector {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    async checkSubtitle(subtitle) {
-        const text = subtitle.text;
+    // ==================== LANGUAGETOOL API ====================
 
-        if (!text.trim()) {
-            return;
-        }
+    async checkWithLanguageTool(subtitle) {
+        const text = subtitle.text;
+        if (!text.trim()) return;
 
         const params = new URLSearchParams();
         params.append('text', text);
         params.append('language', 'de-DE');
         params.append('enabledOnly', 'false');
-        // Aktiviere alle Kategorien inkl. Zeichensetzung
         params.append('disabledCategories', '');
-        // Spezifisch Komma- und Punktregeln aktivieren
         params.append('enabledCategories', 'PUNCTUATION,TYPOGRAPHY,CASING,GRAMMAR,TYPOS,STYLE');
 
         const response = await fetch(this.languageToolUrl, {
@@ -392,15 +464,13 @@ class SRTCorrector {
                         length: match.length,
                         original: text.substring(match.offset, match.offset + match.length),
                         replacements: allReplacements,
-                        selectedIndex: 0,
                         message: match.message,
-                        rule: match.rule?.description || 'Unbekannte Regel'
+                        rule: match.rule?.description || 'Regel'
                     });
                 }
             }
 
             if (matches.length > 0) {
-                subtitle.matches = matches;
                 subtitle.corrections = matches.map(m => ({
                     original: m.original,
                     replacement: m.replacements[0],
@@ -413,12 +483,121 @@ class SRTCorrector {
 
                 subtitle.correctedText = this.applyCorrections(text, subtitle.corrections);
                 subtitle.corrected = true;
+            }
+        }
+    }
 
-                this.corrections.set(subtitle.index, {
-                    original: text,
-                    corrected: subtitle.correctedText,
-                    details: subtitle.corrections
-                });
+    // ==================== CLAUDE API ====================
+
+    async checkWithClaude(batch) {
+        const textsToCheck = batch.map(sub => ({
+            id: sub.index,
+            text: sub.text
+        }));
+
+        const prompt = `Du bist ein professioneller deutscher Lektor. Prüfe die folgenden Untertiteltexte auf:
+1. Rechtschreibfehler
+2. Grammatikfehler
+3. Kommasetzung (wichtig!)
+4. Punktsetzung
+5. Groß-/Kleinschreibung
+
+Für jeden Text, der Fehler enthält, gib die Korrekturen an.
+Behalte den ursprünglichen Stil und Zeilenumbrüche bei.
+
+Antworte NUR mit einem JSON-Objekt in diesem Format:
+{
+  "corrections": [
+    {
+      "id": 1,
+      "hasErrors": true,
+      "original": "Der originale Text",
+      "corrected": "Der korrigierte Text",
+      "changes": [
+        {"from": "fehler", "to": "richtig", "reason": "Rechtschreibung"}
+      ]
+    }
+  ]
+}
+
+Wenn ein Text keine Fehler hat, setze "hasErrors" auf false.
+
+Texte:
+${JSON.stringify(textsToCheck, null, 2)}`;
+
+        const response = await fetch(this.claudeApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.claudeApiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 4096,
+                messages: [
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ]
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error?.message || `API-Fehler: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const content = data.content[0].text;
+
+        // Parse JSON response
+        let result;
+        try {
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                result = JSON.parse(jsonMatch[0]);
+            } else {
+                result = JSON.parse(content);
+            }
+        } catch (e) {
+            console.error('JSON parse error:', e, content);
+            return;
+        }
+
+        // Apply corrections
+        if (result.corrections) {
+            for (const correction of result.corrections) {
+                if (correction.hasErrors) {
+                    const subtitle = this.subtitles.find(s => s.index === correction.id);
+                    if (subtitle) {
+                        subtitle.correctedText = correction.corrected;
+                        subtitle.corrected = true;
+
+                        // Create corrections array from changes
+                        if (correction.changes && correction.changes.length > 0) {
+                            subtitle.corrections = correction.changes.map(c => ({
+                                original: c.from,
+                                replacement: c.to,
+                                allReplacements: [c.to],
+                                message: c.reason || 'Korrektur',
+                                offset: 0,
+                                length: c.from.length
+                            }));
+                        } else {
+                            subtitle.corrections = [{
+                                original: subtitle.originalText,
+                                replacement: correction.corrected,
+                                allReplacements: [correction.corrected],
+                                message: 'Korrektur',
+                                offset: 0,
+                                length: subtitle.originalText.length
+                            }];
+                        }
+                    }
+                }
             }
         }
     }
@@ -428,9 +607,11 @@ class SRTCorrector {
         let result = text;
 
         for (const corr of sorted) {
-            result = result.substring(0, corr.offset) +
-                     corr.replacement +
-                     result.substring(corr.offset + corr.length);
+            if (corr.offset !== undefined && corr.length !== undefined) {
+                result = result.substring(0, corr.offset) +
+                         corr.replacement +
+                         result.substring(corr.offset + corr.length);
+            }
         }
 
         return result;
@@ -445,7 +626,7 @@ class SRTCorrector {
             : this.subtitles;
 
         if (filtered.length === 0 && filterOnly) {
-            this.subtitlesList.innerHTML = '<div class="no-corrections">Keine Korrekturen mehr offen. Deaktiviere den Filter, um alle Untertitel zu sehen.</div>';
+            this.subtitlesList.innerHTML = '<div class="no-corrections">Keine Korrekturen mehr offen.</div>';
         } else {
             this.subtitlesList.innerHTML = filtered.map(sub => this.renderSubtitleItem(sub)).join('');
         }
@@ -459,11 +640,8 @@ class SRTCorrector {
         const isAccepted = sub.accepted;
 
         let statusClass = '';
-        if (hasCorrection) {
-            statusClass = 'has-correction';
-        } else if (isAccepted) {
-            statusClass = 'accepted';
-        }
+        if (hasCorrection) statusClass = 'has-correction';
+        else if (isAccepted) statusClass = 'accepted';
 
         return `
             <div class="subtitle-item ${statusClass}" data-index="${sub.index}">
@@ -473,14 +651,14 @@ class SRTCorrector {
                         <button class="btn-icon jump-to-time" data-time="${sub.startTime}" title="Zur Position springen">▶️</button>
                         ${sub.startTimeStr} → ${sub.endTimeStr}
                     </span>
-                    ${hasCorrection ? '<span class="correction-badge">⚠️ Korrektur verfügbar</span>' : ''}
+                    ${hasCorrection ? '<span class="correction-badge">⚠️ Korrektur</span>' : ''}
                     ${isAccepted ? '<span class="accepted-badge">✓ Korrigiert</span>' : ''}
                 </div>
                 <div class="subtitle-content">
                     <div class="subtitle-text ${hasCorrection ? 'needs-correction' : ''}"
                          contenteditable="true"
                          data-index="${sub.index}">${this.escapeHtml(sub.text)}</div>
-                    <div class="edit-hint">💡 Klicken zum Bearbeiten • Enter = Speichern • Shift+Enter = Neue Zeile</div>
+                    <div class="edit-hint">💡 Klicken zum Bearbeiten • Enter = Speichern</div>
                 </div>
                 ${hasCorrection ? this.renderCorrectionPanel(sub) : ''}
             </div>
@@ -514,17 +692,15 @@ class SRTCorrector {
         return `
             <div class="correction-panel">
                 <div class="correction-panel-header">
-                    <span>📝 ${sub.corrections.length} Fehler gefunden</span>
+                    <span>📝 ${sub.corrections.length} Korrektur${sub.corrections.length > 1 ? 'en' : ''}</span>
                     <div class="correction-panel-actions">
-                        <button class="btn btn-success btn-small accept-btn" data-index="${sub.index}">✓ Alle übernehmen</button>
+                        <button class="btn btn-success btn-small accept-btn" data-index="${sub.index}">✓ Übernehmen</button>
                         <button class="btn btn-secondary btn-small reject-btn" data-index="${sub.index}">✗ Ignorieren</button>
                     </div>
                 </div>
-                <div class="correction-items">
-                    ${correctionsHtml}
-                </div>
+                <div class="correction-items">${correctionsHtml}</div>
                 <div class="correction-preview">
-                    <div class="preview-label">Vorschau nach Korrektur:</div>
+                    <div class="preview-label">Vorschau:</div>
                     <div class="preview-text" data-index="${sub.index}">${this.escapeHtml(sub.correctedText)}</div>
                 </div>
             </div>
@@ -538,7 +714,6 @@ class SRTCorrector {
     }
 
     attachEventListeners() {
-        // Accept/Reject buttons
         this.subtitlesList.querySelectorAll('.accept-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const index = parseInt(e.target.closest('.accept-btn').dataset.index, 10);
@@ -553,7 +728,6 @@ class SRTCorrector {
             });
         });
 
-        // Editable text fields
         this.subtitlesList.querySelectorAll('.subtitle-text').forEach(el => {
             el.addEventListener('blur', (e) => {
                 const index = parseInt(e.target.dataset.index, 10);
@@ -566,17 +740,8 @@ class SRTCorrector {
                     e.target.blur();
                 }
             });
-
-            el.addEventListener('focus', (e) => {
-                e.target.classList.add('editing');
-            });
-
-            el.addEventListener('input', (e) => {
-                e.target.classList.add('modified');
-            });
         });
 
-        // Jump to time buttons
         this.subtitlesList.querySelectorAll('.jump-to-time').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const time = parseFloat(e.target.closest('.jump-to-time').dataset.time);
@@ -587,7 +752,6 @@ class SRTCorrector {
             });
         });
 
-        // Correction dropdowns
         this.subtitlesList.querySelectorAll('.correction-select').forEach(select => {
             select.addEventListener('change', (e) => {
                 const subIndex = parseInt(e.target.dataset.subIndex, 10);
@@ -620,10 +784,7 @@ class SRTCorrector {
         if (!subtitle) return;
 
         const trimmedText = newText.trim();
-
-        if (trimmedText === subtitle.text) {
-            return;
-        }
+        if (trimmedText === subtitle.text) return;
 
         subtitle.text = trimmedText;
 
@@ -640,17 +801,11 @@ class SRTCorrector {
 
     acceptCorrection(index) {
         const subtitle = this.subtitles.find(s => s.index === index);
-        if (subtitle) {
-            if (subtitle.corrections && subtitle.corrections.length > 0) {
-                subtitle.correctedText = this.applyCorrections(subtitle.originalText, subtitle.corrections);
-            }
-
-            if (subtitle.correctedText) {
-                subtitle.text = subtitle.correctedText;
-                subtitle.accepted = true;
-                this.renderSubtitles();
-                this.showToast('Korrektur übernommen', 'success');
-            }
+        if (subtitle && subtitle.correctedText) {
+            subtitle.text = subtitle.correctedText;
+            subtitle.accepted = true;
+            this.renderSubtitles();
+            this.showToast('Korrektur übernommen', 'success');
         }
     }
 
@@ -660,7 +815,6 @@ class SRTCorrector {
             subtitle.corrected = false;
             subtitle.accepted = false;
             subtitle.corrections = [];
-            this.corrections.delete(index);
             this.renderSubtitles();
             this.showToast('Korrektur ignoriert', 'info');
         }
@@ -668,14 +822,9 @@ class SRTCorrector {
 
     acceptAllCorrections() {
         this.subtitles.forEach(sub => {
-            if (sub.corrected && !sub.accepted) {
-                if (sub.corrections && sub.corrections.length > 0) {
-                    sub.correctedText = this.applyCorrections(sub.originalText, sub.corrections);
-                }
-                if (sub.correctedText) {
-                    sub.text = sub.correctedText;
-                    sub.accepted = true;
-                }
+            if (sub.corrected && !sub.accepted && sub.correctedText) {
+                sub.text = sub.correctedText;
+                sub.accepted = true;
             }
         });
         this.renderSubtitles();
@@ -689,7 +838,6 @@ class SRTCorrector {
                 sub.corrections = [];
             }
         });
-        this.corrections.clear();
         this.renderSubtitles();
         this.showToast('Alle Korrekturen ignoriert', 'info');
     }

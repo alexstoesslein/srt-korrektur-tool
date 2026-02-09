@@ -9,7 +9,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎬 SRT Korrektur-Tool</h1>
+            <h1>SRT Korrektur-Tool</h1>
             <p>Überprüfe und korrigiere Untertitel mit KI-Unterstützung</p>
         </header>
 
@@ -37,9 +37,39 @@
                 </div>
             </section>
 
-            <!-- Info Section -->
-            <section class="info-section">
-                <p>✨ Kostenlose Rechtschreibprüfung powered by <a href="https://languagetool.org" target="_blank">LanguageTool</a> - kein API-Key erforderlich!</p>
+            <!-- API Selection Section -->
+            <section class="api-section">
+                <div class="api-toggle">
+                    <span class="api-toggle-label">Prüfmethode:</span>
+                    <div class="toggle-buttons">
+                        <button class="toggle-btn active" data-api="languagetool">
+                            🆓 LanguageTool (kostenlos)
+                        </button>
+                        <button class="toggle-btn" data-api="claude">
+                            🤖 Claude AI (bessere Qualität)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="api-key-section" id="claude-api-section" style="display: none;">
+                    <div class="api-input-group">
+                        <label for="claude-api-key">Claude API-Key:</label>
+                        <input type="password" id="claude-api-key" placeholder="sk-ant-...">
+                        <button id="toggle-api-key" class="btn-icon" title="API-Key anzeigen/verbergen">👁️</button>
+                    </div>
+                    <p class="api-hint">
+                        Der API-Key wird lokal in deinem Browser gespeichert.
+                        <a href="https://console.anthropic.com/settings/keys" target="_blank">API-Key erstellen</a>
+                    </p>
+                </div>
+
+                <div class="api-info" id="languagetool-info">
+                    <p>✨ Kostenlose Rechtschreibprüfung powered by <a href="https://languagetool.org" target="_blank">LanguageTool</a></p>
+                </div>
+
+                <div class="api-info" id="claude-info" style="display: none;">
+                    <p>🤖 Intelligente Korrektur mit Claude AI - versteht Kontext und Bedeutung besser</p>
+                </div>
             </section>
 
             <!-- Video Preview -->
@@ -107,7 +137,7 @@
         </main>
 
         <footer>
-            <p>SRT Korrektur-Tool &copy; 2024 | Powered by LanguageTool (kostenlos)</p>
+            <p>SRT Korrektur-Tool &copy; 2024</p>
         </footer>
     </div>
 

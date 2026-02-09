@@ -108,27 +108,123 @@ header p {
     word-break: break-all;
 }
 
-/* Info Section */
-.info-section {
-    background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+/* API Section */
+.api-section {
+    background: var(--bg-secondary);
     border-radius: 12px;
-    padding: 1rem 1.5rem;
+    padding: 1.5rem;
     margin-bottom: 2rem;
-    text-align: center;
 }
 
-.info-section p {
-    margin: 0;
+.api-toggle {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.api-toggle-label {
+    font-weight: 600;
+}
+
+.toggle-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.toggle-btn {
+    padding: 0.6rem 1.2rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+    border-color: var(--primary);
+    background: var(--bg-tertiary);
+}
+
+.toggle-btn.active {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+.api-key-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.api-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.api-input-group label {
+    font-weight: 600;
+    min-width: 120px;
+}
+
+.api-input-group input {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
     font-size: 1rem;
 }
 
-.info-section a {
+.api-input-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.api-hint {
+    margin-top: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.api-hint a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.api-hint a:hover {
+    text-decoration: underline;
+}
+
+.api-info {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.api-info p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.api-info a {
     color: #fbbf24;
     text-decoration: none;
     font-weight: 600;
 }
 
-.info-section a:hover {
+.api-info a:hover {
     text-decoration: underline;
 }
 
